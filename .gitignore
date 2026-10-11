@@ -1,0 +1,30 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Models & Weights
+model/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.gguf
+
+# Logs
+*.log
+nohup.out
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# System / IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~

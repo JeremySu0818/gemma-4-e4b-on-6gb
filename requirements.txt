@@ -1,0 +1,6 @@
+# Pinned core dependencies for Gemma-4-E4B low-VRAM vLLM server
+vllm==0.31.0
+torch==2.13.0
+transformers==5.17.0
+accelerate>=1.0.0
+huggingface-hub>=0.28.0
