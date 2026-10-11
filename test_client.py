@@ -7,7 +7,7 @@ def main():
     payload = {
         "model": "google/gemma-4-e4b",
         "messages": [
-            {"role": "user", "content": "請用繁體中文寫一首關於人工智慧與程式設計的四行短詩。"}
+            {"role": "user", "content": "hello, world"}
         ],
         "max_tokens": 100,
         "temperature": 0.7
@@ -19,17 +19,17 @@ def main():
         headers={"Content-Type": "application/json"}
     )
     
-    print("發送測試請求至 vLLM Server (http://localhost:1234)...")
+    print("Sending test request to vLLM Server (http://localhost:1234)...")
     try:
         with urllib.request.urlopen(req) as response:
             result = json.loads(response.read().decode("utf-8"))
             content = result["choices"][0]["message"]["content"]
             tokens = result["usage"]["total_tokens"]
-            print("\n=== 模型回覆 ===")
+            print("\n=== Model Response ===")
             print(content)
-            print(f"\n[Token 統計] 總計使用: {tokens} tokens")
+            print(f"\n[Token Usage] Total: {tokens} tokens")
     except Exception as e:
-        print(f"[錯誤] 請求失敗: {e}")
+        print(f"[Error] Request failed: {e}")
 
 if __name__ == "__main__":
     main()

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""
-patch_vllm.py
-Automated patch script for running Gemma-4-E4B on consumer GPUs (e.g. 6GB VRAM)
-by offloading huge unquantized embedding weights to CPU memory in vLLM.
-"""
-
 import sys
 import os
 import re
@@ -18,12 +12,10 @@ def patch_vocab_parallel_embedding(vllm_dir: str):
     with open(target_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 1. Check if already patched
     if "requires_device_loading = False" in content and "is_huge = weight_bytes > 2 * 1024 * 1024 * 1024" in content:
         print("[+] vocab_parallel_embedding.py is already patched.")
         return True
 
-    # 2. Patch requires_device_loading in UnquantizedEmbeddingMethod
     old_cls = """class UnquantizedEmbeddingMethod(QuantizeMethodBase):
     \"\"\"Unquantized method for embeddings.\"\"\"
 
@@ -44,18 +36,6 @@ def patch_vocab_parallel_embedding(vllm_dir: str):
             content,
         )
 
-    # 3. Patch create_weights to place huge embeddings on CPU
-    old_create = """        weight = Parameter(
-            torch.empty(
-                sum(output_partition_sizes),
-                input_size_per_partition,
-                dtype=params_dtype,
-                device=params_dtype,
-            ),
-            requires_grad=False,
-        )"""
-    
-    # Check general create_weights
     create_pattern = re.compile(
         r"def create_weights\([\s\S]*?\):\s*\"\"\"Create weights for embedding layer\.\"\"\"\s*"
     )
@@ -74,14 +54,12 @@ def patch_vocab_parallel_embedding(vllm_dir: str):
         )
 """
         content = content[:m.start()] + replacement + content[m.end():]
-        # replace device=None with device=target_device in torch.empty
         content = re.sub(
             r"torch\.empty\(\s*sum\(output_partition_sizes\),\s*input_size_per_partition,\s*dtype=params_dtype,\s*\)",
             r"torch.empty(sum(output_partition_sizes), input_size_per_partition, dtype=params_dtype, device=target_device)",
             content
         )
 
-    # 4. Patch embedding method for cross-device forward
     old_emb = """    def embedding(self, layer: torch.nn.Module, input_: torch.Tensor) -> torch.Tensor:
         return F.embedding(input_, layer.weight)"""
     new_emb = """    def embedding(self, layer: torch.nn.Module, input_: torch.Tensor) -> torch.Tensor:
@@ -106,7 +84,7 @@ def patch_utils(vllm_dir: str):
     with open(target_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    if "Don't force huge CPU parameters" in content:
+    if "p.numel() * p.element_size() > 1024 * 1024 * 1024" in content or "Don't force huge CPU parameters" in content:
         print("[+] model_loader/utils.py is already patched.")
         return True
 
@@ -121,7 +99,6 @@ def patch_utils(vllm_dir: str):
         if getattr(p, "_vllm_is_uva_offloaded", False):
             uva_offloaded_parameters.append(name)
         elif p.device.type == "cpu":
-            # Don't force huge CPU parameters (e.g. vocab embeddings) onto GPU
             if p.numel() * p.element_size() > 1024 * 1024 * 1024:
                 continue
             cpu_params.add(name)

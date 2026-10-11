@@ -2,10 +2,10 @@
 +++ b/vllm/model_executor/layers/vocab_parallel_embedding.py
 @@ -39,6 +39,7 @@
      """Unquantized method for embeddings."""
- 
+
      supports_pre_processed_weights = True
 +    requires_device_loading = False
- 
+
      def create_weights(
          self,
 @@ -51,17 +52,23 @@
@@ -15,15 +15,14 @@
 +        weight_bytes = sum(output_partition_sizes) * input_size_per_partition * 2
 +        is_huge = weight_bytes > 2 * 1024 * 1024 * 1024
 +        target_device = (
-             "cpu"
-             if (
-                 is_huge
--            )
++            "cpu"
++            if (
++                is_huge
 +                or "embed_tokens_per_layer" in str(getattr(layer, "prefix", ""))
 +                or "embed_tokens_per_layer" in str(extra_weight_attrs)
 +            )
 +            else None
-         )
++        )
          weight = Parameter(
              torch.empty(
                  sum(output_partition_sizes),
@@ -36,22 +35,21 @@
          )
 @@ -88,6 +95,8 @@
          return dispatch_unquantized_gemm()(layer, x, layer.weight, bias)
- 
+
      def embedding(self, layer: torch.nn.Module, input_: torch.Tensor) -> torch.Tensor:
 +        if layer.weight.device != input_.device:
 +            return F.embedding(input_.to(layer.weight.device), layer.weight).to(input_.device)
          return F.embedding(input_, layer.weight)
- 
+
      def tie_weights(
 --- a/vllm/model_executor/model_loader/utils.py
 +++ b/vllm/model_executor/model_loader/utils.py
-@@ -213,7 +213,10 @@
+@@ -213,7 +213,9 @@
      for name, p in module.named_parameters():
          if getattr(p, "_vllm_is_uva_offloaded", False):
              uva_offloaded_parameters.append(name)
 -        if p.device.type == "cpu":
 +        elif p.device.type == "cpu":
-+            # Don't force huge CPU parameters (e.g. vocab embeddings) onto GPU
 +            if p.numel() * p.element_size() > 1024 * 1024 * 1024:
 +                continue
              cpu_params.add(name)
